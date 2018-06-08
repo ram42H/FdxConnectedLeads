@@ -23,6 +23,8 @@ namespace FdxConnectedLeads
 
             int step = 0;
 
+            Guid contextLead_accountId = Guid.Empty;
+
             //Call Input parameter collection to get all the data passes....
 
             //on Update Leaddisqualify message 
@@ -54,7 +56,7 @@ namespace FdxConnectedLeads
                         #region Fetch groupid of context lead
                         QueryExpression contextLeadQuery = new QueryExpression();
                         contextLeadQuery.EntityName = "lead";
-                        contextLeadQuery.ColumnSet = new ColumnSet("fdx_groupid", "leadid");
+                        contextLeadQuery.ColumnSet = new ColumnSet("fdx_groupid", "leadid", "parentaccountid");
                         contextLeadQuery.Criteria.AddCondition("leadid", ConditionOperator.Equal, leadEntityReference.Id);
                         EntityCollection contextLeadCollection = service.RetrieveMultiple(contextLeadQuery);
                         #endregion
@@ -63,11 +65,11 @@ namespace FdxConnectedLeads
                         if (contextLeadCollection.Entities.Count > 0)
                         {
                             Entity contextLead = contextLeadCollection[0];
-                            step = 2;
+                            step = 2;                           
                             #region Fetch Connected Leads except context lead(Leads with similar Group Id)
                             QueryExpression connectedLeadsQuery = new QueryExpression();
                             connectedLeadsQuery.EntityName = "lead";
-                            connectedLeadsQuery.ColumnSet = new ColumnSet("leadid");
+                            connectedLeadsQuery.ColumnSet = new ColumnSet("leadid", "parentaccountid");
                             connectedLeadsQuery.Criteria.AddFilter(LogicalOperator.And);
                             connectedLeadsQuery.Criteria.AddCondition("fdx_groupid", ConditionOperator.Equal, contextLead.Attributes["fdx_groupid"]);
                             connectedLeadsQuery.Criteria.AddCondition("leadid", ConditionOperator.NotEqual, contextLead.Id);
@@ -78,6 +80,18 @@ namespace FdxConnectedLeads
                             step = 3;
                             foreach (Entity connectedLead in connectedLeadsCollection.Entities)
                             {
+                                #region SMART-821: Tag account to connected lead with context lead's account if empty
+                                step = 15;
+                                if (contextLead.Attributes.Contains("parentaccountid"))
+                                {
+                                    step = 16;
+                                    contextLead_accountId = ((EntityReference)contextLead.Attributes["parentaccountid"]).Id;
+
+                                    step = 17;
+                                    UpdateAccountOnConnectedLead.updateConnectLeadAcc(connectedLead, contextLead_accountId, service);
+                                }
+                                #endregion
+
                                 #region Disqualify connected lead
                                 step = 4;
                                 SetStateRequest request = new SetStateRequest

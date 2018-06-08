@@ -88,7 +88,7 @@ namespace FdxConnectedLeads
                         #region Fetch Connected Leads except context lead(Leads with similar Group Id)
                         QueryExpression connectedLeadsQuery = new QueryExpression();
                         connectedLeadsQuery.EntityName = "lead";
-                        connectedLeadsQuery.ColumnSet = new ColumnSet("fdx_groupid", "leadid", "parentcontactid", "firstname", "lastname", "telephone1", "telephone2", "fdx_salutation", "fdx_credential", "fdx_jobtitlerole", "emailaddress1", "address1_city", "fdx_stateprovince", "fdx_zippostalcode", "address1_country", "address1_line1", "address1_line2","fdx_isdecisionmaker");//add all contact attributes***
+                        connectedLeadsQuery.ColumnSet = new ColumnSet("fdx_groupid", "leadid", "parentcontactid", "parentaccountid", "firstname", "lastname", "telephone1", "telephone2", "fdx_salutation", "fdx_credential", "fdx_jobtitlerole", "emailaddress1", "address1_city", "fdx_stateprovince", "fdx_zippostalcode", "address1_country", "address1_line1", "address1_line2","fdx_isdecisionmaker");//add all contact attributes***
                         connectedLeadsQuery.Criteria.AddFilter(LogicalOperator.And);
                         connectedLeadsQuery.Criteria.AddCondition("fdx_groupid", ConditionOperator.Equal, contextLead.Attributes["fdx_groupid"]);
                         connectedLeadsQuery.Criteria.AddCondition("leadid", ConditionOperator.NotEqual, contextLead.Id);
@@ -218,8 +218,22 @@ namespace FdxConnectedLeads
                                     #region Tag new contact to connected lead
                                     step = 10;
                                     connectedLead.Attributes["parentcontactid"] = new EntityReference("contact", contact.Id);
-                                    service.Update(connectedLead);
+                                    
                                     #endregion
+
+                                    #region SMART-821: Tag account to connected lead with context lead's account if empty
+                                    step = 40;
+                                    if (!connectedLead.Attributes.Contains("parentaccountid"))
+                                    {
+                                        if (contextLead.Attributes.Contains("parentaccountid"))
+                                            connectedLead.Attributes["parentaccountid"] = new EntityReference("account", ((EntityReference)contextLead.Attributes["parentaccountid"]).Id);
+                                        else if (qual_accountId != Guid.Empty)
+                                            connectedLead.Attributes["parentaccountid"] = new EntityReference("account", qual_accountId);
+                                    }
+                                    #endregion
+
+                                    step = 41;
+                                    service.Update(connectedLead);
 
                                 }
 
