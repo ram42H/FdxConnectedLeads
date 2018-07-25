@@ -111,6 +111,8 @@ namespace FdxConnectedLeads
                             connectedLeadsQuery = "<fetch version='1.0' output-format='xml-platform' mapping='logical' distinct='false'>" +
                                                           "<entity name='lead'>" +
                                                              "<attribute name='leadid' />" +
+                                                             "<attribute name='firstname' />" +
+                                                             "<attribute name='lastname' />" +
                                                               "<attribute name='fdx_groupid' />" +
                                                               "<attribute name='parentaccountid' />" +
                                                               "<attribute name='parentcontactid' />" +
@@ -130,27 +132,28 @@ namespace FdxConnectedLeads
                                                               "<attribute name='statecode' />" +
                                                               "<order attribute='fdx_groupid' descending='false' />" +
                                                               "<filter type='and'>" +
-                                                                "<condition attribute='fdx_groupid' operator='eq' value='" + contextLead.Attributes["fdx_groupid"] + "' />" +
-                                                                "<condition attribute='statecode' operator='in'>" +
-                                                                  "<value>0</value>" +
-                                                                  "<value>2</value>" +
-                                                                "</condition>" +
-                                                                "<condition attribute='statuscode' operator='in'>" +
-                                                                  "<value>756480016</value>" +
-                                                                  "<value>756480006</value>" +
-                                                                  "<value>756480007</value>" +
-                                                                  "<value>756480008</value>" +
-                                                                  "<value>756480009</value>" +
-                                                                  "<value>756480010</value>" +
-                                                                  "<value>756480011</value>" +
-                                                                  "<value>756480012</value>" +
-                                                                  "<value>756480013</value>" +
-                                                                "</condition>" +
-                                                                "<condition attribute='leadid' operator='ne' value='" + contextLead.Id + "'/>" +
-                                                              "</filter>" +
-                                                            "</entity>" +
-                                                          "</fetch>";
-
+                                                              "<filter type='or'>" +
+                                                                "<condition attribute='statecode' operator='eq' value='0' />" +
+                                                                "<filter type='and'>" +
+                                                                  "<condition attribute='statecode' operator='eq' value='2' />" +
+                                                                  "<condition attribute='statuscode' operator='in'>" +
+                                                                      "<value>756480016</value>" +
+                                                                      "<value>756480006</value>" +
+                                                                      "<value>756480007</value>" +
+                                                                      "<value>756480008</value>" +
+                                                                      "<value>756480009</value>" +
+                                                                      "<value>756480010</value>" +
+                                                                      "<value>756480011</value>" +
+                                                                      "<value>756480012</value>" +
+                                                                      "<value>756480013</value>" +
+                                                                      "</condition>" +
+                                                                    "</filter>" +
+                                                                  "</filter>" +
+                                                                  "<condition attribute='fdx_groupid' operator='eq' value='" + contextLead.Attributes["fdx_groupid"] + "' />" +
+                                                                  "<condition attribute='leadid' operator='ne' value='" + contextLead.Id + "'/>" +
+                                                                "</filter>" +
+                                                              "</entity>" +
+                                                            "</fetch>";
                             connectedLeadsCollection = service.RetrieveMultiple(new FetchExpression(connectedLeadsQuery));
                         }
                         //and lead is not closed0
@@ -194,6 +197,9 @@ namespace FdxConnectedLeads
                         Entity contact;
                         foreach (Entity connectedLead in connectedLeadsCollection.Entities)
                         {
+                            OptionSetValue StateCode = (OptionSetValue)connectedLead.Attributes["statecode"];
+
+                          //  OptionSetValue StatusCode = (OptionSetValue)connectedLead.Attributes["statuscode"];
                             contact = null;
                             if (connectedLead.LogicalName == "lead")
                             {
@@ -201,6 +207,7 @@ namespace FdxConnectedLeads
                                 //If connected lead existing contact doesnot exist
                                 if (!connectedLead.Attributes.Contains("parentcontactid"))
                                 {
+                                    
                                     #region Create contact for connected lead
                                     //add all mapping attributes lead to contact***
                                     contact = new Entity("contact", Guid.NewGuid());
@@ -297,12 +304,13 @@ namespace FdxConnectedLeads
                                     #endregion
 
                                     step = 41;
-                                    service.Update(connectedLead);
+                                    if (StateCode.Value == 0)
+                                    {
+                                        service.Update(connectedLead);
+                                    }
 
                                 }
-                                OptionSetValue StateCode = (OptionSetValue)connectedLead.Attributes["statecode"];
-
-                                OptionSetValue StatusCode = (OptionSetValue)connectedLead.Attributes["statuscode"];
+                                
 
                                 #region Disqualify connected lead
                                 if (StateCode.Value == 0)
@@ -316,6 +324,7 @@ namespace FdxConnectedLeads
                                     step = 15;
                                     service.Execute(request);
                                     step = 13;
+                                    tracingService.Trace("Open leads are Disqualified");
                                 }
                                 
                                 #endregion
