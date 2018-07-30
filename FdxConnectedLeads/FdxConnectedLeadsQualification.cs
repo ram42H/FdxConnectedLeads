@@ -13,15 +13,18 @@ namespace FdxConnectedLeads
 {
     public class FdxConnectedLeadsQualification : IPlugin
     {
+        IOrganizationService service;
+        ITracingService tracingService;
+        int step = 0;
         public void Execute(IServiceProvider serviceProvider)
         {
             //Extract the tracing service for use in debugging sandboxed plug-ins....
-            ITracingService tracingService = (ITracingService)serviceProvider.GetService(typeof(ITracingService));
+            tracingService = (ITracingService)serviceProvider.GetService(typeof(ITracingService));
 
             //Obtain execution context from the service provider....
             IPluginExecutionContext context = (IPluginExecutionContext)serviceProvider.GetService(typeof(IPluginExecutionContext));
 
-            int step = 0;
+
 
             //Call Input parameter collection to get all the data passes....
 
@@ -38,32 +41,23 @@ namespace FdxConnectedLeads
                 try
                 {
                     IOrganizationServiceFactory serviceFactory = (IOrganizationServiceFactory)serviceProvider.GetService(typeof(IOrganizationServiceFactory));
-                    IOrganizationService service = serviceFactory.CreateOrganizationService(context.UserId);
+                    service = serviceFactory.CreateOrganizationService(context.UserId);
 
                     //Get current user information....
                     WhoAmIResponse response = (WhoAmIResponse)service.Execute(new WhoAmIRequest());
-
                     step = 0;
-
-                    #region Fetch groupid of context lead
-                    QueryExpression contextLeadQuery = new QueryExpression();
-                    contextLeadQuery.EntityName = "lead";
-                    contextLeadQuery.ColumnSet = new ColumnSet("fdx_groupid", "leadid", "statuscode", "statecode", "parentaccountid", "parentcontactid", "fdx_isdecisionmaker");
-                    contextLeadQuery.Criteria.AddCondition("leadid", ConditionOperator.Equal, leadEntityReference.Id);
-                    EntityCollection contextLeadCollection = service.RetrieveMultiple(contextLeadQuery);
+                    #region Get Data from RetrieveGroupidfromContext function
+                    EntityCollection contextLeadCollection = this.RetrieveGroupidfromContext(leadEntityReference);
                     #endregion
 
-                    step = 115;
-                    #region Retrive stakeholder & decisionmaker connectionroleid to update opportunity stakeholders connection role
-                    QueryExpression connectionRoleQuery = new QueryExpression();
-                    connectionRoleQuery.EntityName = "connectionrole";
-                    connectionRoleQuery.ColumnSet = new ColumnSet("connectionroleid", "name");
-                    connectionRoleQuery.Criteria.AddCondition("name", ConditionOperator.In, new string[] { "Stakeholder", "Decision Maker" });
-                    EntityCollection connectionRoleCollection = service.RetrieveMultiple(connectionRoleQuery);
+                    step = 116;
+                    #region Get Data from Retrive stakeholder & decisionmaker function to update opportunity stakeholders connection role
+
+                    EntityCollection connectionRoleCollec = this.RetrievestakeholderDecisionmakerconnection();
 
                     Guid conrole_StakeholderId = Guid.Empty;
                     Guid conrole_DecisionMakerId = Guid.Empty;
-                    foreach (Entity connectionRole in connectionRoleCollection.Entities)
+                    foreach (Entity connectionRole in connectionRoleCollec.Entities)
                     {
                         step = 4;
                         switch (connectionRole.Attributes["name"].ToString())
@@ -75,7 +69,6 @@ namespace FdxConnectedLeads
                                 //newAccount = service.Retrieve(crEntities.LogicalName, crEntities.Id, new ColumnSet("accountid"));
                                 conrole_DecisionMakerId = connectionRole.Id;
                                 break;
-
                         }
                     }
                     #endregion
@@ -96,65 +89,9 @@ namespace FdxConnectedLeads
                         //connectedLeadsQuery.Criteria.AddCondition("leadid", ConditionOperator.NotEqual, contextLead.Id);
                         //connectedLeadsQuery.Criteria.AddCondition("statecode", ConditionOperator.NotEqual, 2);
 
-                        //S820 to get Open Leads and Disqualified connected leads with Reason 
-                        //Disqualify - Connected Lead
-                        //Nurture - Too Expensive
-                        //Nurture - No Budget
-                        //Nurture - No Trust
-                        //Nurture - With Competitor
-                        //Nurture - No Immediate Need
-                        //Nurture - Exhausted Contact
-                        //Nurture - Would not accept Online Payment
-                        //Nurture - No available Membership in Market
-                        if(contextLead.Contains("fdx_groupid"))
+                        if (contextLead.Contains("fdx_groupid"))
                         {
-                            connectedLeadsQuery = "<fetch version='1.0' output-format='xml-platform' mapping='logical' distinct='false'>" +
-                                                          "<entity name='lead'>" +
-                                                             "<attribute name='leadid' />" +
-                                                             "<attribute name='firstname' />" +
-                                                             "<attribute name='lastname' />" +
-                                                              "<attribute name='fdx_groupid' />" +
-                                                              "<attribute name='parentaccountid' />" +
-                                                              "<attribute name='parentcontactid' />" +
-                                                              "<attribute name='telephone2' />" +
-                                                              "<attribute name='telephone1' />" +
-                                                              "<attribute name='fdx_zippostalcode' />" +
-                                                              "<attribute name='fdx_stateprovince' />" +
-                                                              "<attribute name='fdx_salutation' />" +
-                                                              "<attribute name='fdx_jobtitlerole' />" +
-                                                              "<attribute name='fdx_isdecisionmaker' />" +
-                                                              "<attribute name='fdx_credential' />" +
-                                                              "<attribute name='emailaddress1' />" +
-                                                              "<attribute name='address1_line2' />" +
-                                                              "<attribute name='address1_line1' />" +
-                                                              "<attribute name='address1_country' />" +
-                                                              "<attribute name='address1_city' />" +
-                                                              "<attribute name='statecode' />" +
-                                                              "<order attribute='fdx_groupid' descending='false' />" +
-                                                              "<filter type='and'>" +
-                                                              "<filter type='or'>" +
-                                                                "<condition attribute='statecode' operator='eq' value='0' />" +
-                                                                "<filter type='and'>" +
-                                                                  "<condition attribute='statecode' operator='eq' value='2' />" +
-                                                                  "<condition attribute='statuscode' operator='in'>" +
-                                                                      "<value>756480016</value>" +
-                                                                      "<value>756480006</value>" +
-                                                                      "<value>756480007</value>" +
-                                                                      "<value>756480008</value>" +
-                                                                      "<value>756480009</value>" +
-                                                                      "<value>756480010</value>" +
-                                                                      "<value>756480011</value>" +
-                                                                      "<value>756480012</value>" +
-                                                                      "<value>756480013</value>" +
-                                                                      "</condition>" +
-                                                                    "</filter>" +
-                                                                  "</filter>" +
-                                                                  "<condition attribute='fdx_groupid' operator='eq' value='" + contextLead.Attributes["fdx_groupid"] + "' />" +
-                                                                  "<condition attribute='leadid' operator='ne' value='" + contextLead.Id + "'/>" +
-                                                                "</filter>" +
-                                                              "</entity>" +
-                                                            "</fetch>";
-                            connectedLeadsCollection = service.RetrieveMultiple(new FetchExpression(connectedLeadsQuery));
+                            connectedLeadsCollection = this.ConnectedLeadscollection(contextLead.Attributes["fdx_groupid"].ToString(), contextLead.Id);
                         }
                         //and lead is not closed0
                         #endregion
@@ -199,7 +136,8 @@ namespace FdxConnectedLeads
                         {
                             OptionSetValue StateCode = (OptionSetValue)connectedLead.Attributes["statecode"];
 
-                          //  OptionSetValue StatusCode = (OptionSetValue)connectedLead.Attributes["statuscode"];
+                            OptionSetValue StatusCode = (OptionSetValue)connectedLead.Attributes["statuscode"];
+
                             contact = null;
                             if (connectedLead.LogicalName == "lead")
                             {
@@ -207,7 +145,7 @@ namespace FdxConnectedLeads
                                 //If connected lead existing contact doesnot exist
                                 if (!connectedLead.Attributes.Contains("parentcontactid"))
                                 {
-                                    
+
                                     #region Create contact for connected lead
                                     //add all mapping attributes lead to contact***
                                     contact = new Entity("contact", Guid.NewGuid());
@@ -274,7 +212,7 @@ namespace FdxConnectedLeads
                                     //tag contact to account 
                                     if (contextLead.Attributes.Contains("parentaccountid"))
                                         contact.Attributes["parentcustomerid"] = new EntityReference("account", ((EntityReference)contextLead.Attributes["parentaccountid"]).Id);
-                                        
+
                                     else if (qual_accountId != Guid.Empty)
                                         contact.Attributes["parentcustomerid"] = new EntityReference("account", qual_accountId);
 
@@ -298,36 +236,47 @@ namespace FdxConnectedLeads
                                             connectedLead.Attributes["parentaccountid"] = new EntityReference("account", ((EntityReference)contextLead.Attributes["parentaccountid"]).Id);
                                         else if (qual_accountId != Guid.Empty)
                                             connectedLead.Attributes["parentaccountid"] = new EntityReference("account", qual_accountId);
-
+                                    }
+                                    #endregion
+                                    step = 41;
+                                    #region Open Connected Leads & Disqualify them
+                                    if (StateCode.Value == 0)
+                                    {
+                                        //Update Open Connected lead
+                                        service.Update(connectedLead);
                                         tracingService.Trace("Account tagged to connected Leads with context lead's Account");
+
+                                        SetStateRequest request = new SetStateRequest
+                                        {
+                                            EntityMoniker = new EntityReference("lead", connectedLead.Id),
+                                            State = new OptionSetValue(2),    //Status = disqualify(2)
+                                            Status = new OptionSetValue(756480016) //Status Reason = disqualify - connected lead  
+                                        };
+                                        step = 15;
+                                        service.Execute(request);
+                                        step = 13;
+                                        tracingService.Trace("Open leads are Disqualified");
                                     }
                                     #endregion
 
-                                    step = 41;
-                                    if (StateCode.Value == 0)
+                                    #region Closed Leads, Re-open to update Account info and Close them
+                                    else if (StateCode.Value != 0)
                                     {
+                                        //Re-Open the lead to update account information
+                                        SetStateRequest request1 = new SetStateRequest
+                                        {
+                                            EntityMoniker = new EntityReference("lead", connectedLead.Id),
+                                            State = new OptionSetValue(0),    //Status = Open
+                                            Status = new OptionSetValue(1) //Status Reason = New
+                                        };
+                                        service.Execute(request1);
+                                        tracingService.Trace("Lead is Reopened");
+                                        //Update closed lead
                                         service.Update(connectedLead);
+                                        tracingService.Trace("Closed Lead is udpated with account info");
                                     }
-
+                                    #endregion
                                 }
-                                
-
-                                #region Disqualify connected lead
-                                if (StateCode.Value == 0)
-                                {
-                                    SetStateRequest request = new SetStateRequest
-                                    {
-                                        EntityMoniker = new EntityReference("lead", connectedLead.Id),
-                                        State = new OptionSetValue(2),    //Status = disqualify(2)
-                                        Status = new OptionSetValue(756480016) //Status Reason = disqualify - connected lead  
-                                    };
-                                    step = 15;
-                                    service.Execute(request);
-                                    step = 13;
-                                    tracingService.Trace("Open leads are Disqualified");
-                                }
-                                
-                                #endregion
 
                                 #region Create a stakeholder connection in opportunity for connected lead -> new contact or existing contact
                                 step = 11;
@@ -406,5 +355,103 @@ namespace FdxConnectedLeads
                 }
             }
         }
+
+        #region Fetch groupid of context lead
+        private EntityCollection RetrieveGroupidfromContext(EntityReference leadEntityReference)
+        {
+
+            QueryExpression contextLeadQuery = new QueryExpression();
+            contextLeadQuery.EntityName = "lead";
+            contextLeadQuery.ColumnSet = new ColumnSet("fdx_groupid", "leadid", "statuscode", "statecode", "parentaccountid", "parentcontactid", "fdx_isdecisionmaker");
+            contextLeadQuery.Criteria.AddCondition("leadid", ConditionOperator.Equal, leadEntityReference.Id);
+            EntityCollection contextLeadCollect = service.RetrieveMultiple(contextLeadQuery);
+            return contextLeadCollect;
+        }
+        #endregion
+
+        #region SMART -820 to get Open Leads and Disqualified connected leads with Reason
+        //Disqualify - Connected Lead
+        //Nurture - Too Expensive
+        //Nurture - No Budget
+        //Nurture - No Trust
+        //Nurture - With Competitor
+        //Nurture - No Immediate Need
+        //Nurture - Exhausted Contact
+        //Nurture - Would not accept Online Payment
+        //Nurture - No available Membership in Market
+        private EntityCollection ConnectedLeadscollection(string contextgroupid, Guid contextleadid)
+        {
+            // step = 500;
+            EntityCollection opendisqualifiedleads = new EntityCollection();
+            string query = "<fetch version='1.0' output-format='xml-platform' mapping='logical' distinct='false'>" +
+                                                          "<entity name='lead'>" +
+                                                            "<attribute name='leadid' />" +
+                                                            "<attribute name='telephone2' />" +
+                                                            "<attribute name='telephone1' />" +
+                                                            "<attribute name='statuscode' />" +
+                                                            "<attribute name='statecode' />" +
+                                                            "<attribute name='fdx_zippostalcode' />" +
+                                                            "<attribute name='fdx_stateprovince' />" +
+                                                            "<attribute name='fdx_salutation' />" +
+                                                            "<attribute name='fdx_jobtitlerole' />" +
+                                                            "<attribute name='fdx_isdecisionmaker' />" +
+                                                            "<attribute name='fdx_credential' />" +
+                                                            "<attribute name='emailaddress1' />" +
+                                                            "<attribute name='address1_line2' />" +
+                                                            "<attribute name='address1_line1' />" +
+                                                            "<attribute name='address1_country' />" +
+                                                            "<attribute name='address1_city' />" +
+                                                            "<attribute name='firstname' />" +
+                                                            "<attribute name='fdx_groupid' />" +
+                                                            "<attribute name='lastname' />" +
+                                                            "<attribute name='parentaccountid' />" +
+                                                            "<attribute name='parentcontactid' />" +
+                                                            "<order attribute='telephone2' descending='false' />" +
+                                                            "<filter type='and'>" +
+                                                              "<filter type='and'>" +
+                                                                "<condition attribute='fdx_groupid' operator='eq' value='" + contextgroupid + "' />" +
+                                                                "<condition attribute='leadid' operator='ne' value='" + contextleadid + "' />" +
+                                                                "<filter type='or'>" +
+                                                                  "<condition attribute='statecode' operator='eq' value='0' />" +
+                                                                  "<filter type='and'>" +
+                                                                    "<condition attribute='statecode' operator='eq' value='2' />" +
+                                                                    "<condition attribute='statuscode' operator='in'>" +
+                                                                      "<value>756480016</value>" +
+                                                                      "<value>756480006</value>" +
+                                                                      "<value>756480007</value>" +
+                                                                      "<value>756480008</value>" +
+                                                                      "<value>756480009</value>" +
+                                                                      "<value>756480010</value>" +
+                                                                      "<value>756480011</value>" +
+                                                                      "<value>756480012</value>" +
+                                                                      "<value>756480013</value>" +
+                                                                        "</condition>" +
+                                                                      "</filter>" +
+                                                                    "</filter>" +
+                                                                  "</filter>" +
+                                                                "</filter>" +
+                                                              "</entity>" +
+                                                            "</fetch>";
+
+            opendisqualifiedleads = service.RetrieveMultiple(new FetchExpression(query));
+
+            return opendisqualifiedleads;
+        }
+        #endregion
+
+        #region Retrive stakeholder & decisionmaker connectionroleid to update opportunity stakeholders connection role
+        private EntityCollection RetrievestakeholderDecisionmakerconnection()
+        {
+            step = 115;
+
+            QueryExpression connectionRoleQuery = new QueryExpression();
+            connectionRoleQuery.EntityName = "connectionrole";
+            connectionRoleQuery.ColumnSet = new ColumnSet("connectionroleid", "name");
+            connectionRoleQuery.Criteria.AddCondition("name", ConditionOperator.In, new string[] { "Stakeholder", "Decision Maker" });
+            EntityCollection connectionRoleCollection = service.RetrieveMultiple(connectionRoleQuery);
+            return connectionRoleCollection;
+
+        }
+        #endregion
     }
 }
